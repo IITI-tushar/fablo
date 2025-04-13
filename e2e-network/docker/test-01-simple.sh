@@ -90,3 +90,7 @@ expectInvoke "peer0.org1.example.com" "my-channel1" "chaincode1" \
 expectInvoke "peer0.org1.example.com" "my-channel1" "chaincode1" \
   '{"Args":["KVContract:put", "name", "James Bond"]}' \
   '{\"success\":\"OK\"}'
+
+# Test chaincode query
+expectCommand "(cd \"$TEST_TMP\" && \"$FABLO_HOME/fablo.sh\" chaincode query peer0.org1.example.com my-channel1 chaincode1 '{\"Args\":[\"KVContract:get\",\"name\"]}')" \
+  '{\"success\":\"James Bond\"}'

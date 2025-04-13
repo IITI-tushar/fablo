@@ -104,7 +104,7 @@ installChannels() {
           <% } -%>
         <% }) -%>
       <% }) -%>
-    <% }) -%>
+    <% }) %>
   <% } -%>
 }
 
@@ -224,7 +224,7 @@ notifyOrgsAboutChannels() {
     <% channel.orgs.forEach((org) => { -%>
       deleteNewChannelUpdateTx "<%= channel.name %>" "<%= org.mspName %>" "<%= org.cli.address %>"
     <% }) -%>
-  <% }) -%>
+  <% }) %>
 
   <% } else { %> 
     echo ""
@@ -266,4 +266,75 @@ networkDown() {
   rm -rf "$FABLO_NETWORK_ROOT/fabric-config/chaincode-packages"
 
   printHeadline "Done! Network was purged" "U1F5D1"
+}
+
+query() {
+  if [ "$#" -ne 4 ]; then
+    echo "Expected 4 parameters for chaincode query, but got: $*"
+    echo "Usage: fablo chaincode query <peer_domains_comma_separated> <channel_name> <chaincode_name> <command>"
+    exit 1
+  fi
+  cli=""
+  peer_addresses=""
+  <% if (global.tls) { %>
+     peer_certs=""
+  <% } %>
+  <% orgs.forEach((org) => { -%>
+    <% org.peers.forEach((peer) => { -%>
+      if [[ "$1" == *"<%= peer.address %>"* ]]; then
+        cli="<%= org.cli.address %>"
+        peer_addresses="$peer_addresses,<%= peer.fullAddress %>"
+        <% if(global.tls) { %>
+           peer_certs="$peer_certs,crypto/peers/<%= peer.address %>/tls/ca.crt"
+        <% } %>
+      fi
+    <% }) -%>
+  <% }) -%>
+  if [ -z "$peer_addresses" ]; then
+    echo "Unknown peers: $1"
+    exit 1
+  fi
+  <% if(!global.tls) { %>
+    peerChaincodeQuery "$cli" "${peer_addresses:1}" "$2" "$3" "$4"
+  <% } else { %>
+    <% channels.forEach((channel) => { %>
+      if [ "$2" = "<%= channel.name %>" ]; then
+        ca_cert="crypto-orderer/tlsca.<%= ordererGroups[0].ordererHeads[0].domain %>-cert.pem"
+      fi
+    <% }) %>
+    peerChaincodeQueryTls "$cli" "${peer_addresses:1}" "$2" "$3" "$4" "${peer_certs:1}" "$ca_cert"
+  <% } %>
+}
+
+peerChaincodeQuery() {
+  local cli=$1
+  local peer_addresses=$2
+  local channel_name=$3
+  local chaincode_name=$4
+  local command=$5
+
+  docker exec -i "$cli" peer chaincode query \
+    -C "$channel_name" \
+    -n "$chaincode_name" \
+    -c "$command" \
+    --peerAddresses "$peer_addresses"
+}
+
+peerChaincodeQueryTls() {
+  local cli=$1
+  local peer_addresses=$2
+  local channel_name=$3
+  local chaincode_name=$4
+  local command=$5
+  local peer_certs=$6
+  local ca_cert=$7
+
+  docker exec -i "$cli" peer chaincode query \
+    -C "$channel_name" \
+    -n "$chaincode_name" \
+    -c "$command" \
+    --peerAddresses "$peer_addresses" \
+    --tlsRootCertFiles "$peer_certs" \
+    --tls \
+    --cafile "$ca_cert"
 }
